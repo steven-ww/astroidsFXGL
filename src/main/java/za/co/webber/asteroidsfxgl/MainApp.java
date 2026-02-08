@@ -1,8 +1,11 @@
 package za.co.webber.asteroidsfxgl;
 
 import static java.lang.Math.min;
+import static za.co.webber.asteroidsfxgl.hud.HudDisplay.drawHighScore;
 import static za.co.webber.asteroidsfxgl.hud.HudDisplay.drawLives;
 import static za.co.webber.asteroidsfxgl.hud.HudDisplay.drawScore;
+import static za.co.webber.asteroidsfxgl.hud.HudDisplay.showGameOver;
+import static za.co.webber.asteroidsfxgl.hud.HudDisplay.showLeaderboard;
 
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
@@ -13,7 +16,10 @@ import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.input.Input;
 import com.almasb.fxgl.input.UserAction;
 import com.almasb.fxgl.physics.CollisionHandler;
-import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.stream.Collectors;
 import javafx.geometry.Point2D;
 import javafx.scene.input.KeyCode;
 import javafx.scene.paint.Color;
@@ -51,12 +57,14 @@ public class MainApp extends GameApplication {
 
   @Override
   protected void initGame() {
+    FXGL.set("isGameOver", false);
     FXGL.getGameWorld().addEntityFactory(new PlayerFactory());
     FXGL.getGameWorld().addEntityFactory(new AsteroidFactory());
     Entity player = FXGL.spawn("player", 640, 360); // 640 360
     playerComp = player.getComponent(PlayerComponent.class);
     drawLives(FXGL.geti("lives"));
     drawScore(FXGL.geti("score"));
+    drawHighScore();
 
     spawnLevelAsteroids(FXGL.geti("level") * 2 + 4);
   }
@@ -119,7 +127,54 @@ public class MainApp extends GameApplication {
           },
           javafx.util.Duration.seconds(1.5));
     } else {
-      FXGL.getNotificationService().pushNotification("Game Over!");
+      gameOver();
+    }
+  }
+
+  private void gameOver() {
+    FXGL.set("isGameOver", true);
+    // Stop all game logic/entities if necessary
+    FXGL.getGameWorld().getEntitiesCopy().forEach(Entity::removeFromWorld);
+
+    showGameOver();
+
+    int score = FXGL.geti("score");
+    List<ScoreData> scores = getHighScores();
+
+    boolean isHighScore = scores.size() < 10 || score > scores.get(scores.size() - 1).score();
+
+    if (isHighScore) {
+      FXGL.getDialogService()
+          .showInputBox(
+              "New High Score! Enter 3 characters:",
+              (String name) -> {
+                String entryName =
+                    (name == null || name.trim().isEmpty()) ? "AAA" : name.toUpperCase();
+                if (entryName.length() > 3) {
+                  entryName = entryName.substring(0, 3);
+                }
+
+                scores.add(new ScoreData(entryName, score));
+                scores.sort(Comparator.comparingInt(ScoreData::score).reversed());
+
+                List<ScoreData> topTen = scores.stream().limit(10).collect(Collectors.toList());
+                saveHighScores(topTen);
+
+                showLeaderboard(
+                    topTen.stream()
+                        .map(sd -> String.format("%-3s  %d", sd.name(), sd.score()))
+                        .collect(Collectors.toList()));
+              });
+    } else {
+      FXGL.runOnce(
+          () -> {
+            showLeaderboard(
+                scores.stream()
+                    .limit(10)
+                    .map(sd -> String.format("%-3s  %d", sd.name(), sd.score()))
+                    .collect(Collectors.toList()));
+          },
+          javafx.util.Duration.seconds(2));
     }
   }
 
@@ -156,6 +211,10 @@ public class MainApp extends GameApplication {
   private void addScore(int delta) {
     FXGL.inc("score", delta);
     drawScore(FXGL.geti("score"));
+    if (FXGL.geti("score") > FXGL.geti("highScore")) {
+      FXGL.set("highScore", FXGL.geti("score"));
+      drawHighScore();
+    }
   }
 
   @Override
@@ -198,6 +257,10 @@ public class MainApp extends GameApplication {
             new UserAction("Shoot") {
               @Override
               protected void onActionBegin() {
+                if (FXGL.getb("isGameOver")) {
+                  FXGL.getGameController().startNewGame();
+                  return;
+                }
 
                 // Limit active player bullets to MAX_BULLETS
                 try {
@@ -239,12 +302,52 @@ public class MainApp extends GameApplication {
    */
   @Override
   protected void initGameVars(Map<String, Object> vars) {
+    vars.put("isGameOver", false);
     vars.put("pixelsMoved", 0);
     vars.put("lives", 3);
     vars.put("score", 0);
     vars.put("level", 0);
     vars.put("asteroidCount", 0);
     vars.put("bulletCount", 0);
+    vars.put("highScore", getHighScore());
+  }
+
+  private int getHighScore() {
+    List<ScoreData> scores = getHighScores();
+    return scores.isEmpty() ? 0 : scores.get(0).score();
+  }
+
+  private record ScoreData(String name, int score) {}
+
+  private List<ScoreData> getHighScores() {
+    try {
+      Path path = Path.of("highscore.txt");
+      if (!Files.exists(path)) {
+        return new ArrayList<>();
+      }
+      List<String> allLines = Files.readAllLines(path);
+      return allLines.stream()
+          .map(line -> line.split(","))
+          .filter(split -> split.length == 2)
+          .map(split -> new ScoreData(split[0], Integer.parseInt(split[1])))
+          .sorted(Comparator.comparingInt(ScoreData::score).reversed())
+          .collect(Collectors.toList());
+    } catch (Exception e) {
+      return new ArrayList<>();
+    }
+  }
+
+  private void saveHighScores(List<ScoreData> scores) {
+    try {
+      List<String> lines =
+          scores.stream()
+              .limit(10)
+              .map(sd -> sd.name() + "," + sd.score())
+              .collect(Collectors.toList());
+      Files.write(Path.of("highscore.txt"), lines);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   private void spawnLargeAsteroidOffscreen() {
