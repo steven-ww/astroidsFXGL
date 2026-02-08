@@ -10,7 +10,7 @@ public class BulletComponent extends Component {
 
   private double life = 0;
 
-  private Point2D velocity;
+  private final Point2D velocity;
 
   public BulletComponent(Point2D direction, Point2D shipVelocity) {
     // Bullet moves forward + inherits ship movement
@@ -42,6 +42,19 @@ public class BulletComponent extends Component {
     life += tpf;
     if (life > LIFETIME) {
       entity.removeFromWorld();
+    }
+  }
+
+  @Override
+  public void onRemoved() {
+    // Decrement global bullet counter safely when this bullet is removed (collision, timeout, etc.)
+    try {
+      int count = com.almasb.fxgl.dsl.FXGL.geti("bulletCount");
+      if (count > 0) {
+        com.almasb.fxgl.dsl.FXGL.inc("bulletCount", -1);
+      }
+    } catch (Exception ignored) {
+      // If bulletCount not present for some reason, ignore silently
     }
   }
 }

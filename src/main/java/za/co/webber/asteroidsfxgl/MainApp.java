@@ -35,6 +35,7 @@ public class MainApp extends GameApplication {
 
   private PlayerComponent playerComp;
   private static final int MAX_ASTEROIDS = 10;
+  private static final int MAX_BULLETS = 4;
 
   @Override
   protected void initSettings(GameSettings settings) {
@@ -261,6 +262,16 @@ public class MainApp extends GameApplication {
                   return;
                 }
 
+                // Limit active player bullets to MAX_BULLETS
+                try {
+                  if (FXGL.geti("bulletCount") >= MAX_BULLETS) {
+                    return;
+                  }
+                } catch (Exception ignored) {
+                  // If bulletCount is not yet initialized, allow shooting (initGameVars will set
+                  // it)
+                }
+
                 // Get ship position & rotation
                 Point2D bulletSpawn = playerComp.getNosePosition(14);
                 //        Point2D shipPos = playerComp.getCenter();
@@ -276,6 +287,8 @@ public class MainApp extends GameApplication {
                         bulletSpawn, rotation, shipVelocity);
 
                 FXGL.getGameWorld().addEntity(bullet);
+                // Increment bullet count when we successfully add a bullet
+                FXGL.inc("bulletCount", 1);
               }
             },
             KeyCode.SPACE);
@@ -295,6 +308,7 @@ public class MainApp extends GameApplication {
     vars.put("score", 0);
     vars.put("level", 0);
     vars.put("asteroidCount", 0);
+    vars.put("bulletCount", 0);
     vars.put("highScore", getHighScore());
   }
 
