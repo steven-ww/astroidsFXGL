@@ -1,17 +1,17 @@
 package za.co.webber.asteroidsfxgl.components;
 
-import com.almasb.fxgl.dsl.FXGL;
 import com.almasb.fxgl.entity.component.Component;
 import java.util.concurrent.ThreadLocalRandom;
 import javafx.geometry.Point2D;
+import za.co.webber.asteroidsfxgl.GameConfig;
 
 public class AsteroidComponent extends Component {
 
   private final AsteroidSize size;
 
-  private Point2D velocity; // pixels per second
-  private double spin; // degrees per second
-  private double wrapMargin; // size-dependent margin for off-screen wrapping
+  private Point2D velocity;
+  private double spin;
+  private double wrapMargin;
 
   public AsteroidComponent(AsteroidSize size) {
     this.size = size;
@@ -19,41 +19,36 @@ public class AsteroidComponent extends Component {
 
   @Override
   public void onAdded() {
-    double w = FXGL.getAppWidth();
-    double h = FXGL.getAppHeight();
-    double cx = w / 2.0;
-    double cy = h / 2.0;
+    double cx = GameConfig.SCREEN_WIDTH / 2.0;
+    double cy = GameConfig.SCREEN_HEIGHT / 2.0;
 
     double dx = cx - entity.getX();
     double dy = cy - entity.getY();
     Point2D dirToCenter = new Point2D(dx, dy).normalize();
 
-    double angleJitter = rnd(-25, 25); // degrees
+    double angleJitter = rnd(-GameConfig.ASTEROID_ANGLE_JITTER, GameConfig.ASTEROID_ANGLE_JITTER);
     Point2D jittered = rotate(dirToCenter, Math.toRadians(angleJitter));
 
-    // Base speed range roughly matches the original large asteroid behavior
-    double baseMinSpeed = 60;
-    double baseMaxSpeed = 120;
-    double speedMult;
-    switch (size) {
-      case LARGE -> speedMult = 1.0;
-      case MEDIUM -> speedMult = 1.4;
-      case SMALL -> speedMult = 1.9;
-      default -> speedMult = 1.0;
-    }
+    double speedMult =
+        switch (size) {
+          case LARGE -> GameConfig.ASTEROID_SPEED_MULT_LARGE;
+          case MEDIUM -> GameConfig.ASTEROID_SPEED_MULT_MEDIUM;
+          case SMALL -> GameConfig.ASTEROID_SPEED_MULT_SMALL;
+        };
 
-    double speed = rnd(baseMinSpeed * speedMult, baseMaxSpeed * speedMult);
+    double speed =
+        rnd(
+            GameConfig.ASTEROID_BASE_MIN_SPEED * speedMult,
+            GameConfig.ASTEROID_BASE_MAX_SPEED * speedMult);
     velocity = jittered.multiply(speed);
 
-    spin = rnd(-40, 40);
+    spin = rnd(GameConfig.ASTEROID_SPIN_MIN, GameConfig.ASTEROID_SPIN_MAX);
 
-    // Larger asteroids wrap with a larger off-screen margin so they don't pop
     wrapMargin =
         switch (size) {
-          case LARGE -> 36.0;
-          case MEDIUM -> 26.0;
-          case SMALL -> 18.0;
-          default -> 36.0;
+          case LARGE -> GameConfig.ASTEROID_WRAP_MARGIN_LARGE;
+          case MEDIUM -> GameConfig.ASTEROID_WRAP_MARGIN_MEDIUM;
+          case SMALL -> GameConfig.ASTEROID_WRAP_MARGIN_SMALL;
         };
   }
 
@@ -65,8 +60,8 @@ public class AsteroidComponent extends Component {
   }
 
   private void wrapAround() {
-    double w = FXGL.getAppWidth();
-    double h = FXGL.getAppHeight();
+    double w = GameConfig.SCREEN_WIDTH;
+    double h = GameConfig.SCREEN_HEIGHT;
     double x = entity.getX();
     double y = entity.getY();
     double m = wrapMargin;

@@ -1,164 +1,132 @@
 package za.co.webber.asteroidsfxgl.hud;
 
 import com.almasb.fxgl.dsl.FXGL;
+import java.util.ArrayList;
 import java.util.List;
 import javafx.scene.Node;
+import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.LineTo;
-import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
+import za.co.webber.asteroidsfxgl.GameConfig;
+import za.co.webber.asteroidsfxgl.components.ShipShape;
 
+/**
+ * Instance-based HUD that retains node references. Create once in initUI(), then call update
+ * methods to change displayed values without tearing down and re-adding nodes.
+ */
 public class HudDisplay {
 
-  private static final int HUD_MARGIN = 20;
+  private final Text scoreText;
+  private final Text highScoreText;
+  private final HBox livesBox;
 
-  public static Path createMiniShip(double scale) {
-    Path miniShip =
-        new Path(
-            new MoveTo(0, -12),
-            new LineTo(-8, 10),
-            new MoveTo(0, -12),
-            new LineTo(8, 10),
-            new MoveTo(-7, 7),
-            new LineTo(7, 7));
+  // Transient overlay nodes (game-over, leaderboard)
+  private final List<Node> overlayNodes = new ArrayList<>();
 
-    miniShip.setStroke(Color.WHITE);
-    miniShip.setStrokeWidth(1.0);
-    miniShip.setFill(null);
-
-    miniShip.setScaleX(scale);
-    miniShip.setScaleY(scale);
-
-    return miniShip;
-  }
-
-  public static void drawLives(int lives) {
+  /** Creates the HUD and adds all permanent nodes to the FXGL game scene. */
+  public HudDisplay() {
     var ui = FXGL.getGameScene();
 
-    // Clear old icons (important when lives change)
-    List<Node> toRemove =
-        ui.getUINodes().stream().filter(n -> "LIFE".equals(n.getUserData())).toList();
+    // ── Score (upper-left) ─────────────────────────────────────────────
+    scoreText = new Text("00");
+    scoreText.setFill(Color.WHITE);
+    scoreText.setFont(Font.font("Monospaced", GameConfig.HUD_SCORE_FONT_SIZE));
+    scoreText.setTranslateX(GameConfig.HUD_MARGIN);
+    scoreText.setTranslateY(GameConfig.HUD_MARGIN + 15);
+    ui.addUINode(scoreText);
 
-    toRemove.forEach(ui::removeUINode);
+    // ── High-score (top-center) ───────────────────────────────────────
+    highScoreText = new Text("00");
+    highScoreText.setFill(Color.WHITE);
+    highScoreText.setFont(Font.font("Monospaced", GameConfig.HUD_SCORE_FONT_SIZE));
+    highScoreText.setTranslateY(GameConfig.HUD_MARGIN + 15);
+    ui.addUINode(highScoreText);
 
-    for (int i = 0; i < lives - 1; i++) { // do NOT show current ship
-      Path miniShip = createMiniShip(0.6);
+    // ── Lives row (small ship icons below score) ──────────────────────
+    livesBox = new HBox(GameConfig.HUD_LIVES_ICON_SPACING);
+    livesBox.setTranslateX(GameConfig.HUD_MARGIN);
+    livesBox.setTranslateY(GameConfig.HUD_MARGIN + 25);
+    ui.addUINode(livesBox);
+  }
 
-      miniShip.setTranslateX(HUD_MARGIN + i * 15);
-      miniShip.setTranslateY(HUD_MARGIN + 40); // Pushed down slightly
+  /** Update the displayed score text. */
+  public void updateScore(int score) {
+    scoreText.setText(String.format("%02d", score));
+  }
 
-      miniShip.setUserData("LIFE"); // tag for easy removal
-      ui.addUINode(miniShip);
+  /** Update the displayed high-score text and re-centre it. */
+  public void updateHighScore(int highScore) {
+    highScoreText.setText(String.format("%02d", highScore));
+    double textWidth = highScoreText.getLayoutBounds().getWidth();
+    highScoreText.setTranslateX(GameConfig.SCREEN_WIDTH / 2.0 - textWidth / 2.0);
+  }
+
+  /** Rebuild the row of small ship icons for the given number of lives (excludes current ship). */
+  public void updateLives(int lives) {
+    livesBox.getChildren().clear();
+    for (int i = 0; i < lives - 1; i++) {
+      Path icon = ShipShape.createMiniShipIcon(GameConfig.HUD_LIVES_ICON_SCALE);
+      livesBox.getChildren().add(icon);
     }
   }
 
-  public static void drawScore(int score) {
-    var ui = FXGL.getGameScene();
-
-    // Clear old score display
-    List<Node> toRemove =
-        ui.getUINodes().stream().filter(n -> "SCORE".equals(n.getUserData())).toList();
-
-    toRemove.forEach(ui::removeUINode);
-
-    // Create score text in classic arcade style
-    Text scoreText = new Text(String.format("%02d", score));
-    scoreText.setFill(Color.WHITE);
-    scoreText.setFont(Font.font("Monospaced", 24));
-
-    // Position in upper left above the lives, like the original game
-    scoreText.setTranslateX(HUD_MARGIN);
-    scoreText.setTranslateY(HUD_MARGIN + 15);
-
-    scoreText.setUserData("SCORE");
-    ui.addUINode(scoreText);
-  }
-
-  public static void drawHighScore() {
-    var ui = FXGL.getGameScene();
-
-    // Clear old score display
-    List<Node> toRemove =
-        ui.getUINodes().stream().filter(n -> "HIGHSCORE".equals(n.getUserData())).toList();
-
-    toRemove.forEach(ui::removeUINode);
-
-    // Clear Game Over / Leaderboard if they exist
-    ui.getUINodes().stream()
-        .filter(
-            n -> "GAME_OVER_UI".equals(n.getUserData()) || "LEADERBOARD_UI".equals(n.getUserData()))
-        .toList()
-        .forEach(ui::removeUINode);
-
-    // Create score text in classic arcade style
-    Text scoreText = new Text(String.format("%02d", FXGL.geti("highScore")));
-    scoreText.setFill(Color.WHITE);
-    scoreText.setFont(Font.font("Monospaced", 24));
-
-    // Position in center
-    double textWidth = scoreText.getLayoutBounds().getWidth();
-    scoreText.setTranslateX(1280 / 2.0 - textWidth / 2.0);
-    scoreText.setTranslateY(HUD_MARGIN + 15);
-
-    scoreText.setUserData("HIGHSCORE");
-    ui.addUINode(scoreText);
-  }
-
-  public static void showGameOver() {
+  /** Show "GAME OVER" overlay centred on screen. */
+  public void showGameOver() {
     var ui = FXGL.getGameScene();
 
     Text gameOverText = new Text("GAME OVER");
     gameOverText.setFill(Color.WHITE);
-    gameOverText.setFont(Font.font("Monospaced", 48));
+    gameOverText.setFont(Font.font("Monospaced", GameConfig.HUD_GAME_OVER_FONT_SIZE));
 
-    double textWidth = gameOverText.getLayoutBounds().getWidth();
-    gameOverText.setTranslateX(1280 / 2.0 - textWidth / 2.0);
-    gameOverText.setTranslateY(720 / 2.0 - 50);
+    double tw = gameOverText.getLayoutBounds().getWidth();
+    gameOverText.setTranslateX(GameConfig.SCREEN_WIDTH / 2.0 - tw / 2.0);
+    gameOverText.setTranslateY(GameConfig.SCREEN_HEIGHT / 2.0 - 50);
 
-    gameOverText.setUserData("GAME_OVER_UI");
     ui.addUINode(gameOverText);
+    overlayNodes.add(gameOverText);
   }
 
-  public static void showLeaderboard(List<String> scores) {
+  /** Show the high-score leaderboard overlay, replacing any game-over text. */
+  public void showLeaderboard(List<String> scores) {
+    clearOverlays();
     var ui = FXGL.getGameScene();
-
-    // Remove any existing game over UI if we are transitioning to leaderboard
-    ui.getUINodes().stream()
-        .filter(n -> "GAME_OVER_UI".equals(n.getUserData()))
-        .toList()
-        .forEach(ui::removeUINode);
 
     Text title = new Text("HIGH SCORES");
     title.setFill(Color.WHITE);
-    title.setFont(Font.font("Monospaced", 32));
+    title.setFont(Font.font("Monospaced", GameConfig.HUD_TITLE_FONT_SIZE));
     double titleWidth = title.getLayoutBounds().getWidth();
-    title.setTranslateX(1280 / 2.0 - titleWidth / 2.0);
+    title.setTranslateX(GameConfig.SCREEN_WIDTH / 2.0 - titleWidth / 2.0);
     title.setTranslateY(150);
-    title.setUserData("LEADERBOARD_UI");
     ui.addUINode(title);
+    overlayNodes.add(title);
 
     for (int i = 0; i < scores.size(); i++) {
-      String text = scores.get(i);
-
-      Text scoreText = new Text(text);
-      scoreText.setFill(Color.WHITE);
-      scoreText.setFont(Font.font("Monospaced", 20));
-      double sw = scoreText.getLayoutBounds().getWidth();
-      scoreText.setTranslateX(1280 / 2.0 - sw / 2.0);
-      scoreText.setTranslateY(200 + i * 30);
-      scoreText.setUserData("LEADERBOARD_UI");
-      ui.addUINode(scoreText);
+      Text scoreEntry = new Text(scores.get(i));
+      scoreEntry.setFill(Color.WHITE);
+      scoreEntry.setFont(Font.font("Monospaced", GameConfig.HUD_LEADERBOARD_FONT_SIZE));
+      double sw = scoreEntry.getLayoutBounds().getWidth();
+      scoreEntry.setTranslateX(GameConfig.SCREEN_WIDTH / 2.0 - sw / 2.0);
+      scoreEntry.setTranslateY(200 + i * 30);
+      ui.addUINode(scoreEntry);
+      overlayNodes.add(scoreEntry);
     }
 
     Text restartText = new Text("PRESS SPACE TO START");
     restartText.setFill(Color.WHITE);
-    restartText.setFont(Font.font("Monospaced", 24));
+    restartText.setFont(Font.font("Monospaced", GameConfig.HUD_RESTART_FONT_SIZE));
     double rw = restartText.getLayoutBounds().getWidth();
-    restartText.setTranslateX(1280 / 2.0 - rw / 2.0);
+    restartText.setTranslateX(GameConfig.SCREEN_WIDTH / 2.0 - rw / 2.0);
     restartText.setTranslateY(600);
-    restartText.setUserData("LEADERBOARD_UI");
     ui.addUINode(restartText);
+    overlayNodes.add(restartText);
+  }
+
+  /** Remove all transient overlay nodes (game-over, leaderboard). */
+  public void clearOverlays() {
+    var ui = FXGL.getGameScene();
+    overlayNodes.forEach(ui::removeUINode);
+    overlayNodes.clear();
   }
 }
